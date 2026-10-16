@@ -5,7 +5,8 @@ function validate(body, partial = false) {
   if (Object.keys(body).some(key => !['title', 'description', 'priority', 'status'].includes(key))) return 'Unknown field';
   if (partial && !Object.keys(body).length) return 'No changes supplied';
   if (!partial || Object.hasOwn(body, 'title')) {
-    if (typeof body.title !== 'string' || body.title.trim().length < 3 || body.title.trim().length > 100) return 'Title must be 3–100 characters';
+    // TEST ONLY: deliberately weakened minimum; NEVER merge this lab branch.
+    if (typeof body.title !== 'string' || body.title.trim().length < 1 || body.title.trim().length > 100) return 'Title must be 3–100 characters';
   }
   if (Object.hasOwn(body, 'description') && (typeof body.description !== 'string' || body.description.length > 500)) return 'Description must be at most 500 characters';
   if (Object.hasOwn(body, 'priority') && !['low', 'medium', 'high'].includes(body.priority)) return 'Invalid priority';
