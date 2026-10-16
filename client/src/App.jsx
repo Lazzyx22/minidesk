@@ -1,122 +1,54 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useEffect, useState } from 'react'
+import IssueForm from './IssueForm'
+import IssueList from './IssueList'
+import StatsBar from './StatsBar'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+async function api(path, options) {
+  const response = await fetch(`/api${path}`, options)
+  const data = response.status === 204 ? null : await response.json()
+  if (!response.ok) throw new Error(data.error || 'Request failed')
+  return data
 }
-
-export default App
+export default function App() {
+  const [issues, setIssues] = useState([])
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const [items, counts] = await Promise.all([api('/issues'), api('/stats')])
+      setIssues(items); setStats(counts)
+    } catch (err) { setError(err.message) }
+    finally { setLoading(false) }
+  }
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([api('/issues'), api('/stats')])
+      .then(([items, counts]) => { if (!cancelled) { setIssues(items); setStats(counts) } })
+      .catch(err => { if (!cancelled) setError(err.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+  async function mutate(path, method, body) {
+    setBusy(true); setError('')
+    try {
+      await api(path, { method, headers: { 'Content-Type': 'application/json' }, ...(body && { body: JSON.stringify(body) }) })
+      await load()
+      return true
+    } catch (err) { setError(err.message); return false }
+    finally { setBusy(false) }
+  }
+  return <main>
+    <header><div><p className="eyebrow">YOUR TEAM'S SMALL HELP DESK</p><h1>MiniDesk<span> / Issues</span></h1></div><span className="badge">WORKSPACE</span></header>
+    <StatsBar stats={stats} />
+    {error && <div role="alert" className="error">{error} <button onClick={load} disabled={busy || loading}>Retry</button></div>}
+    <div className="workspace"><aside><h2>New issue</h2><p>Capture it. Move it forward.</p><IssueForm busy={busy} onCreate={body => mutate('/issues', 'POST', body)} /></aside>
+    <section aria-label="Issues"><div className="section-heading"><h2>Issue board</h2><span>{issues.length} issues</span></div>
+      {loading ? <p role="status">Loading issues…</p> : <IssueList issues={issues} busy={busy} onStatus={(id, status) => mutate(`/issues/${id}`, 'PATCH', { status })} onDelete={id => mutate(`/issues/${id}`, 'DELETE')} />}
+    </section></div>
+  </main>
+}
