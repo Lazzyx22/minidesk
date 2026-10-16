@@ -35,6 +35,19 @@ test('PATCH nonexistent ID returns 404', async t => {
   const { api } = setup(t);
   await api.patch('/api/issues/999').send({ status: 'done' }).expect(404);
 });
+test('trimmed title boundaries hold for create and PATCH', async t => {
+  const { api } = setup(t);
+  for (const title of ['a', 'ab', ' ab ', 'x'.repeat(101)]) {
+    await api.post('/api/issues').send({ title }).expect(400);
+  }
+  const { body } = await api.post('/api/issues').send({ title: ' abc ' }).expect(201);
+  assert.equal(body.title, 'abc');
+  for (const title of ['a', 'ab', ' ab ', 'x'.repeat(101)]) {
+    await api.patch(`/api/issues/${body.id}`).send({ title }).expect(400);
+  }
+  await api.patch(`/api/issues/${body.id}`).send({ title: 'x'.repeat(100) }).expect(200);
+  await api.post('/api/issues').send({ title: 'x'.repeat(100) }).expect(201);
+});
 test('invalid IDs, patches and JSON are safe', async t => {
   const { api } = setup(t);
   const { body } = await api.post('/api/issues').send({ title: 'Valid' }).expect(201);
